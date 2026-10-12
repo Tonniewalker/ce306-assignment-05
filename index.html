@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>The Cave Treasure</title>
+  <meta name="description" content="เกมผจญภัยสำรวจถ้ำ เก็บอัญมณีให้ครบแล้วหนีออกทางประตู หลบมอนสเตอร์ให้ได้">
+
+  <!-- ตั้งค่าธีมก่อนโหลด Tailwind เพื่อลดการกระพริบ -->
+  <script>
+    try {
+      const saved = localStorage.getItem('cave-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) document.documentElement.classList.add('dark');
+    } catch (e) { /* ไม่มี localStorage ก็ใช้ค่าเริ่มต้น */ }
+  </script>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .dpad {
+        @apply flex h-11 w-11 items-center justify-center rounded-xl border border-stone-300 bg-white text-xl shadow-sm hover:bg-amber-100 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 dark:border-stone-700 dark:bg-stone-800 dark:hover:bg-stone-700 forced-colors:border-[ButtonText];
+      }
+      .kbd {
+        @apply rounded border border-stone-300 bg-stone-100 px-1.5 py-0.5 font-mono text-xs dark:border-stone-600 dark:bg-stone-800 forced-colors:border-[CanvasText];
+      }
+      .stat {
+        @apply flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-bold forced-colors:border forced-colors:border-[CanvasText];
+      }
+      .tool-btn {
+        @apply rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-4 forced-colors:border forced-colors:border-[ButtonText];
+      }
+    }
+  </style>
+  <style>
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.3s ease-in-out 2; }
+    @media (prefers-reduced-motion: reduce) {
+      .shake { animation: none; }
+    }
+    dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+    @media (forced-colors: active) {
+      dialog::backdrop { background: Canvas; }
+    }
+  </style>
+</head>
+<body class="flex h-dvh flex-col overflow-hidden bg-amber-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100 forced-colors:bg-[Canvas] forced-colors:text-[CanvasText]">
+  <a href="#board" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-amber-400 focus:px-4 focus:py-2 focus:font-semibold focus:text-stone-900">ข้ามไปที่กระดานเกม</a>
+
+  <!-- ===== ส่วนหัว ===== -->
+  <header class="shrink-0 border-b border-amber-200 bg-white/70 dark:border-stone-800 dark:bg-stone-900/70 forced-colors:border-[CanvasText]">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2 sm:px-4">
+      <h1 class="truncate text-lg font-extrabold tracking-tight sm:text-2xl">
+        THE CAVE TREASURE💎
+        <!-- <span class="hidden text-sm font-medium text-stone-500 dark:text-stone-400 md:inline forced-colors:text-[CanvasText]">— เกมผจญภัยสำรวจแผนที่</span> -->
+      </h1>
+      <nav aria-label="เมนูเกม" class="flex shrink-0 gap-2">
+        <button id="helpBtn" type="button" aria-haspopup="dialog" aria-controls="helpDialog"
+          class="tool-btn bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-300 dark:bg-sky-500 dark:text-stone-950 dark:hover:bg-sky-400">
+          ❓ วิธีเล่น
+        </button>
+        <button id="themeBtn" type="button" aria-pressed="false"
+          class="tool-btn border border-stone-300 bg-white hover:bg-stone-100 focus-visible:ring-amber-300 dark:border-stone-700 dark:bg-stone-800 dark:hover:bg-stone-700">
+          <span id="themeIcon" aria-hidden="true">🌙</span><span id="themeLabel" class="sr-only sm:not-sr-only sm:ml-1">โหมดมืด</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===== แถบควบคุม: Level + สถานะผู้เล่น + เริ่มใหม่ ===== -->
+  <form id="settingsForm" aria-label="ระดับความยากและสถานะผู้เล่น"
+    class="mx-auto flex w-full max-w-6xl shrink-0 flex-wrap items-center justify-between gap-2 px-3 pt-2 sm:px-4">
+    <fieldset class="flex items-center gap-1 rounded-lg bg-violet-100 p-1 dark:bg-violet-950 forced-colors:border forced-colors:border-[CanvasText]">
+      <legend class="sr-only">ระดับความยาก (Level 1–5)</legend>
+      <button id="levelDown" type="button" aria-label="ลด Level"
+        class="h-8 w-8 rounded-md bg-white text-lg font-bold hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-violet-300 dark:bg-stone-800 dark:hover:bg-stone-700 forced-colors:border forced-colors:border-[ButtonText]">−</button>
+      <output id="levelOutput" for="levelDown levelUp" aria-live="polite" class="min-w-[5.5rem] px-1 text-center text-sm leading-tight">
+        <span class="font-extrabold">Level <span id="levelNumber">1</span></span>
+        <span id="levelName" class="block text-xs text-violet-700 dark:text-violet-300 forced-colors:text-[CanvasText]">มือใหม่</span>
+      </output>
+      <button id="levelUp" type="button" aria-label="เพิ่ม Level"
+        class="h-8 w-8 rounded-md bg-violet-600 text-lg font-bold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-violet-300 dark:bg-violet-500 dark:text-stone-950 dark:hover:bg-violet-400 forced-colors:border forced-colors:border-[ButtonText]">+</button>
+    </fieldset>
+
+    <dl class="flex items-center gap-1.5">
+      <div class="stat bg-rose-100 dark:bg-rose-950">
+        <dt class="sr-only">หัวใจ</dt>
+        <dd id="statHearts">❤️❤️❤️</dd>
+      </div>
+      <div class="stat bg-sky-100 dark:bg-sky-950">
+        <dt><span aria-hidden="true">👣</span><span class="sr-only">ก้าวที่เหลือ</span></dt>
+        <dd id="statSteps">0</dd>
+      </div>
+      <div class="stat bg-emerald-100 dark:bg-emerald-950">
+        <dt><span aria-hidden="true">💎</span><span class="sr-only">อัญมณีที่เก็บได้</span></dt>
+        <dd id="statGems">0/0</dd>
+      </div>
+    </dl>
+
+    <button type="submit" class="tool-btn bg-amber-500 text-stone-950 shadow hover:bg-amber-400 focus-visible:ring-amber-300">
+      🔄 <span class="hidden sm:inline">เริ่มเกมใหม่</span><span class="sr-only sm:hidden">เริ่มเกมใหม่</span>
+    </button>
+
+    <div class="h-1.5 w-full overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700 forced-colors:border forced-colors:border-[CanvasText]"
+      role="progressbar" aria-label="ก้าวที่เหลือ" aria-valuemin="0" id="stepsBar">
+      <div id="stepsBarFill" class="h-full w-full rounded-full bg-sky-500 transition-all duration-300 motion-reduce:transition-none forced-colors:bg-[Highlight]"></div>
+    </div>
+  </form>
+
+  <!-- ===== พื้นที่เล่น ===== -->
+  <main class="mx-auto grid min-h-0 w-full max-w-6xl flex-1 gap-4 px-3 py-2 sm:px-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-3">
+    <section aria-labelledby="board-heading" class="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 max-lg:landscape:grid-cols-[minmax(0,1fr)_auto] max-lg:landscape:grid-rows-[auto_minmax(0,1fr)]">
+      <h2 id="board-heading" class="sr-only">กระดานเกม</h2>
+
+      <!-- ข้อความแจ้งสถานะ -->
+      <p id="status" role="status" aria-live="polite"
+        class="shrink-0 rounded-lg border-2 max-lg:landscape:col-span-2 border-amber-300 bg-amber-100 px-3 py-1.5 text-sm font-medium text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 forced-colors:border-[CanvasText]">
+        กำลังเตรียมถ้ำ...
+      </p>
+
+      <!-- กระดานจะขยายเต็มพื้นที่ที่เหลือ โดยคงเป็นสี่เหลี่ยมจัตุรัส -->
+      <div class="grid min-h-0 place-items-center [container-type:size]">
+        <div id="boardWrap" class="relative aspect-square w-[min(100cqw,100cqh)]">
+          <div id="board" role="img" aria-label="กระดานเกม" tabindex="-1"
+            class="grid h-full w-full gap-0.5 rounded-2xl border-4 border-stone-700 bg-stone-800 p-1 shadow-xl [container-type:inline-size] dark:border-stone-600 dark:bg-black forced-colors:border-[CanvasText] forced-colors:bg-[Canvas] sm:gap-1">
+          </div>
+
+          <!-- ผลลัพธ์ เมื่อชนะ/แพ้ (แสดงทับบนกระดาน) -->
+          <section id="result" aria-labelledby="result-heading"
+            class="absolute inset-0 z-10 hidden items-center justify-center rounded-2xl bg-stone-950/70 p-3 forced-colors:bg-[Canvas]">
+            <div id="resultCard" tabindex="-1" class="w-full max-w-sm rounded-xl border-2 p-4 text-center">
+              <h3 id="result-heading" class="text-lg font-bold sm:text-xl"></h3>
+              <p id="result-text" class="mt-1 text-sm sm:text-base"></p>
+              <div class="mt-3 flex flex-wrap justify-center gap-2">
+                <button id="playAgainBtn" type="button"
+                  class="tool-btn bg-stone-800 text-white hover:bg-stone-700 focus-visible:ring-amber-300 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white">
+                  🔄 เล่นอีกครั้ง
+                </button>
+                <button id="nextLevelBtn" type="button" hidden
+                  class="tool-btn bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-300 dark:bg-emerald-500 dark:text-stone-950 dark:hover:bg-emerald-400">
+                  ⬆️ Level ถัดไป <kbd class="ml-1 rounded bg-white/20 px-1 text-xs">Enter</kbd>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ปุ่มทิศทางสำหรับจอสัมผัส (จอเล็ก) -->
+      <div class="mx-auto grid shrink-0 grid-cols-3 gap-1.5 max-lg:landscape:self-center lg:hidden" role="group" aria-label="ปุ่มควบคุมทิศทาง">
+        <span></span>
+        <button type="button" data-dir="up" aria-label="เดินขึ้น" class="dpad">⬆️</button>
+        <span></span>
+        <button type="button" data-dir="left" aria-label="เดินซ้าย" class="dpad">⬅️</button>
+        <button type="button" data-dir="wait" aria-label="อยู่กับที่ 1 ตา" class="dpad">⏸️</button>
+        <button type="button" data-dir="right" aria-label="เดินขวา" class="dpad">➡️</button>
+        <span></span>
+        <button type="button" data-dir="down" aria-label="เดินลง" class="dpad">⬇️</button>
+        <span></span>
+      </div>
+    </section>
+
+    <!-- ===== แผงข้าง (จอใหญ่) ===== -->
+    <aside class="hidden min-h-0 flex-col gap-3 overflow-y-auto lg:flex" aria-label="กติกาและปุ่มควบคุม">
+      <section aria-labelledby="rules-heading"
+        class="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900 forced-colors:border-[CanvasText]">
+        <h2 id="rules-heading" class="mb-2 text-lg font-bold">กติกา</h2>
+        <ul class="list-disc space-y-1 pl-5 text-sm">
+          <li><strong>ชนะ:</strong> เก็บ 💎 ให้ครบ แล้วเดินไปที่ประตู 🚪</li>
+          <li><strong>แพ้:</strong> หัวใจ ❤️ หมด หรือก้าวเดินหมด</li>
+          <li>ชน 👾 เสียหัวใจ 1 ดวง และกลับจุดเริ่ม</li>
+          <li>เดิน 1 ก้าว = มอนสเตอร์ขยับ 1 ครั้ง</li>
+          <li>เดินชนกำแพง 🧱 ไม่เสียก้าว</li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="controls-heading"
+        class="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900 forced-colors:border-[CanvasText]">
+        <h2 id="controls-heading" class="mb-3 text-lg font-bold">ควบคุม</h2>
+        <div class="mx-auto grid w-fit grid-cols-3 gap-1.5" role="group" aria-label="ปุ่มควบคุมทิศทาง">
+          <span></span>
+          <button type="button" data-dir="up" aria-label="เดินขึ้น" class="dpad">⬆️</button>
+          <span></span>
+          <button type="button" data-dir="left" aria-label="เดินซ้าย" class="dpad">⬅️</button>
+          <button type="button" data-dir="wait" aria-label="อยู่กับที่ 1 ตา" class="dpad">⏸️</button>
+          <button type="button" data-dir="right" aria-label="เดินขวา" class="dpad">➡️</button>
+          <span></span>
+          <button type="button" data-dir="down" aria-label="เดินลง" class="dpad">⬇️</button>
+          <span></span>
+        </div>
+        <p class="mt-3 text-center text-xs text-stone-600 dark:text-stone-400 forced-colors:text-[CanvasText]">
+          <kbd class="kbd">เดิน: ↑ ↓ ← → / WASD</kbd>
+          <kbd class="kbd">R:เริ่มใหม่</kbd><br><br><kbd class="kbd">+ , - : Level</kbd>
+          <kbd class="kbd">H:วิธีเล่น</kbd> 
+        </p>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ===== กล่องวิธีเล่น ===== -->
+  <dialog id="helpDialog" aria-labelledby="help-heading"
+    class="max-h-[90dvh] w-[min(92vw,34rem)] rounded-2xl border border-stone-200 bg-white p-0 text-stone-900 shadow-2xl dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 forced-colors:border-[CanvasText]">
+    <div class="p-5 sm:p-6">
+      <h2 id="help-heading" class="text-xl font-bold">❓ วิธีเล่น</h2>
+      <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm sm:text-base">
+        <li>คุณคือนักผจญภัย 🧙 เริ่มที่มุมซ้ายบนของถ้ำ</li>
+        <li>เดินเก็บอัญมณี 💎 ให้ครบทุกเม็ด ประตู 🔒 จะปลดล็อกเป็น 🚪</li>
+        <li>เดินไปที่ประตูเพื่อหนีออกจากถ้ำ = <strong>ชนะ</strong></li>
+        <li>มอนสเตอร์ 👾 จะขยับทุกครั้งที่คุณเดิน ชนแล้วเสียหัวใจ 1 ดวงและกลับจุดเริ่ม</li>
+        <li>ถ้าหัวใจหมด หรือก้าวเดิน 👣 หมด = <strong>แพ้</strong></li>
+        <li>กด + เพื่อเพิ่ม Level (1–5) ยิ่งสูง ถ้ำยิ่งใหญ่ มอนสเตอร์ยิ่งเยอะและฉลาดขึ้น</li>
+      </ol>
+      <h3 class="mt-5 font-bold">ปุ่มคีย์บอร์ด</h3>
+      <table class="mt-2 w-full text-left text-sm">
+        <caption class="sr-only">ปุ่มควบคุมเกม</caption>
+        <thead>
+          <tr class="border-b border-stone-200 dark:border-stone-700 forced-colors:border-[CanvasText]">
+            <th scope="col" class="py-1 pr-3">ปุ่ม</th>
+            <th scope="col" class="py-1">การทำงาน</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">↑ ↓ ← →</kbd> หรือ <kbd class="kbd">W A S D</kbd></td><td>เดิน</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">Space</kbd> หรือ <kbd class="kbd">.</kbd></td><td>อยู่กับที่ 1 ตา</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">R</kbd></td><td>เริ่มเกมใหม่</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">Enter</kbd></td><td>ไป Level ถัดไป (หลังชนะ)</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">+</kbd> / <kbd class="kbd">-</kbd></td><td>เพิ่ม / ลด Level</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">H</kbd></td><td>เปิดวิธีเล่น</td></tr>
+          <tr><td class="py-1 pr-3"><kbd class="kbd">Esc</kbd></td><td>ปิดหน้าต่างนี้</td></tr>
+        </tbody>
+      </table>
+      <form method="dialog" class="mt-5 text-right">
+        <button type="submit" autofocus
+          class="rounded-lg bg-sky-600 px-5 py-2 font-semibold text-white hover:bg-sky-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300 dark:bg-sky-500 dark:text-stone-950 dark:hover:bg-sky-400 forced-colors:border forced-colors:border-[ButtonText]">
+          เข้าใจแล้ว เริ่มผจญภัย!
+        </button>
+      </form>
+    </div>
+  </dialog>
+
+  <script type="module" src="game/main.js"></script>
+</body>
+</html>
